@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#172a3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="折光庭院">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<title>折光庭院</title>
+
+<style>
+:root {
+  color-scheme: dark;
+  --ink: #eef1e6;
+  --muted: #adbdc2;
+  --line: rgba(231,241,237,.16);
+  --panel: rgba(16,34,45,.91);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #172a3a;
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+}
+button { font: inherit; touch-action: manipulation; }
+button:focus-visible { outline: 2px solid #edc578; outline-offset: 3px; }
+button:disabled { opacity: .4; }
+#game {
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 620px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 32%, #305369, #142938 75%);
+}
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+header {
+  position: absolute;
+  top: calc(15px + env(safe-area-inset-top));
+  left: 20px;
+  right: 20px;
+  pointer-events: none;
+}
+.eyebrow {
+  color: #d7b979;
+  font-size: 10px;
+  letter-spacing: 5px;
+}
+h1 {
+  font-size: 25px;
+  font-weight: 400;
+  letter-spacing: 6px;
+  margin: 8px 0;
+}
+#subtitle { color: var(--muted); font-size: 12px; }
+#stats {
+  margin-top: 12px;
+  display: flex;
+  gap: 18px;
+  font-size: 12px;
+}
+#panel {
+  position: absolute;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 12px;
+  right: 12px;
+  max-width: 560px;
+  margin: auto;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px #07182366;
+}
+#message {
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 40px;
+  color: #d7e0dc;
+}
+#rotors, .toolbar {
+  display: flex;
+  gap: 8px;
+}
+#rotors { margin: 10px 0; }
+button {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff09;
+  color: var(--ink);
+  padding: 11px 8px;
+  cursor: pointer;
+}
+#rotors button {
+  flex: 1;
+  background: #d9b47215;
+  border-color: #d9b47245;
+  color: #efd29c;
+}
+.toolbar button { flex: 1; font-size: 12px; }
+.hint {
+  margin: 10px 0 0;
+  font-size: 10px;
+  color: #90a6af;
+  line-height: 1.5;
+}
+#finish {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 25px;
+  background: #081927b8;
+  backdrop-filter: blur(9px);
+}
+#finish[hidden] { display: none; }
+.finish-card {
+  width: min(100%, 380px);
+  border: 1px solid #d9b47255;
+  border-radius: 24px;
+  text-align: center;
+  padding: 35px 24px;
+  background: #1c3444;
+  box-shadow: 0 30px 100px #0005;
+}
+.finish-card .symbol { font-size: 44px; color: #efcc86; }
+.finish-card h2 { font-weight: 400; letter-spacing: 6px; }
+.finish-card p { font-size: 13px; line-height: 1.8; color: var(--muted); }
+.finish-card button { width: 100%; margin-top: 12px; }
+.primary { background: #d9b472 !important; color: #172a3a; }
+@media (min-width: 800px) {
+  header { left: 35px; top: 30px; }
+}
+</style>
+</head>
+
+<body>
+<main id="game">
+  <canvas id="scene"
+    aria-label="折光庭院空间解谜场景。点击平台移动，通过下方按钮旋转桥梁。">
+  </canvas>
+
+  <header>
+    <div class="eyebrow">LIGHT COURT · 空间习作</div>
+    <h1 id="title">折光庭院</h1>
+    <div id="subtitle"></div>
+    <div id="stats">
+      <span id="seals"></span>
+      <span id="moves"></span>
+    </div>
+  </header>
+
+  <section id="panel" aria-label="游戏操作">
+    <div id="message" role="status" aria-live="polite"></div>
+    <div id="rotors"></div>
+    <div class="toolbar">
+      <button id="view">视角 ↻</button>
+      <button id="undo">撤销</button>
+      <button id="reset">重玩</button>
+    </div>
+    <p class="hint">
+      点平台行走 · 桥上也能旋转 · 集齐光印后到达金色门<br>
+      原创空间谜题；并非《纪念碑谷》官方作品。
+    </p>
+  </section>
+
+  <section id="finish" hidden role="dialog" aria-modal="true"
+           aria-labelledby="finishTitle">
+    <div class="finish-card">
+      <div class="symbol">✧</div>
+      <h2 id="finishTitle">光路已通</h2>
+      <p id="finishText"></p>
+      <button id="next" class="primary">下一座庭院</button>
+      <button id="again">重玩本关</button>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const canvas = $("scene");
+const ctx = canvas.getContext("2d");
+const STORE = "light-court-save-v1";
+
+// 方向：东、南、西、北
+const DIR = [[1,0], [0,1], [-1,0], [0,-1]];
+
+// 关卡由固定码头 + 中心机关 + 两格旋转桥组成。
+// 中心距离 6 时，共享中间的固定码头。
+const LEVELS = [
+  {
+    name: "第一庭 · 回声",
+    subtitle: "一座转桥，四个方向。",
+    hubs: [{x:0, y:0, dir:3}],
+    start: [-3,0],
+    goal: [3,0],
+    seals: [[0,-3], [0,3]],
+    hint: "先把「机关 1」旋转到左侧，接上你所在的平台。"
+  },
+  {
+    name: "第二庭 · 双生",
+    subtitle: "停靠中间的石台，再连接另一座桥。",
+    hubs: [
+      {x:0, y:0, dir:1},
+      {x:6, y:0, dir:3}
+    ],
+    start: [-3,0],
+    goal: [9,0],
+    seals: [[0,-3], [6,3]],
+    hint: "两座桥之间有一个固定中转台；桥断开时可以在那里等待。"
+  },
+  {
+    name: "第三庭 · 星阶",
+    subtitle: "在三个庭院之间，带回散落的光。",
+    hubs: [
+      {x:0, y:0, dir:3},
+      {x:6, y:0, dir:0},
+      {x:6, y:6, dir:2}
+    ],
+    start: [-3,0],
+    goal: [6,9],
+    seals: [[0,3], [6,-3], [9,6]],
+    hint: "先收集第一庭下方的光印，再穿过中转台走向远处。"
+  }
+];
+
+const copy = value => JSON.parse(JSON.stringify(value));
+const fixedId = (x,y) => `p:${x},${y}`;
+
+let levelIndex = 0;
+let state;
+let hubs = [];
+let history = [];
+let walk = null;
+let view = 0;
+let particles = [];
+let hitTargets = [];
+let W = 0, H = 0, scale = 30, ox = 0, oy = 0;
+let storageWarned = false;
+let lastTime = performance.now();
+let frameTime = 0;
+
+function tell(text) {
+  $("message").textContent = text;
+}
+
+function freshState(index) {
+  const level = LEVELS[index];
+  return {
+    dirs: level.hubs.map(h => h.dir),
+    actor: fixedId(...level.start),
+    got: [],
+    moves: 0,
+    won: false
+  };
+}
+
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify({
+      version: 1,
+      level: levelIndex,
+      state
+    }));
+  } catch {
+    if (!storageWarned) {
+      storageWarned = true;
+      tell("浏览器未允许保存进度；当前仍可游玩，但关闭后可能丢失。");
+    }
+  }
+}
+
+function validSave(data) {
+  if (!data || data.version !== 1 ||
+      !Number.isInteger(data.level) ||
+      data.level < 0 || data.level >= LEVELS.length) return false;
+  const s = data.state;
+  return s &&
+    Array.isArray(s.dirs) &&
+    s.dirs.length === LEVELS[data.level].hubs.length &&
+    s.dirs.every(d => Number.isInteger(d) && d >= 0 && d < 4) &&
+    typeof s.actor === "string" &&
+    Array.isArray(s.got) &&
+    s.got.every(v => typeof v === "string") &&
+    Number.isInteger(s.moves) && s.moves >= 0 &&
+    typeof s.won === "boolean";
+}
+
+function loadLevel(index, restored = null) {
+  levelIndex = index;
+  state = restored ? copy(restored) : freshState(index);
+  history = [];
+  walk = null;
+  particles = [];
+  hubs = LEVELS[index].hubs.map((h,i) => ({
+    x: h.x, y: h.y,
+    angle: state.dirs[i] * Math.PI / 2,
+    target: state.dirs[i] * Math.PI / 2
+  }));
+
+  if (!nodes().some(n => n.id === state.actor)) {
+    state = freshState(index);
+    hubs.forEach((h,i) => {
+      h.angle = h.target = state.dirs[i] * Math.PI / 2;
+    });
+  }
+
+  $("title").textContent = LEVELS[index].name;
+  $("subtitle").textContent = LEVELS[index].subtitle;
+  $("rotors").replaceChildren();
+
+  hubs.forEach((h,i) => {
+    const button = document.createElement("button");
+    button.textContent = `机关 ${i + 1} ↻`;
+    button.setAttribute("aria-label", `顺时针旋转机关 ${i + 1}`);
+    button.onclick = () => rotateHub(i);
+    $("rotors").appendChild(button);
+  });
+
+  $("finish").hidden = !state.won;
+  if (state.won) showWin();
+  updateHUD();
+  tell(LEVELS[index].hint);
+  save();
+}
+
+function nodes() {
+  const map = new Map();
+
+  hubs.forEach((h,i) => {
+    for (const [dx,dy] of DIR) {
+      const x = h.x + dx * 3;
+      const y = h.y + dy * 3;
+      const id = fixedId(x,y);
+      map.set(id, {id, x, y, z:2.4, kind:"stone"});
+    }
+
+    map.set(`h${i}`, {
+      id:`h${i}`, x:h.x, y:h.y, z:2.4, kind:"hub", hub:i
+    });
+
+    const [dx,dy] = DIR[state.dirs[i]];
+    for (let r = 1; r <= 2; r++) {
+      const id = `b${i}:${r}`;
+      map.set(id, {
+        id, x:h.x + dx*r, y:h.y + dy*r, z:2.4,
+        kind:"bridge", hub:i, r
+      });
+    }
+  });
+
+  return [...map.values()];
+}
+
+function visualNode(node) {
+  if (node.kind !== "bridge") return node;
+  const h = hubs[node.hub];
+  return {
+    ...node,
+    x:h.x + Math.cos(h.angle)*node.r,
+    y:h.y + Math.sin(h.angle)*node.r
+  };
+}
+
+function isBusy() {
+  return !!walk || hubs.some(h => Math.abs(h.target-h.angle) > .001);
+}
+
+function remember() {
+  history.push(copy(state));
+  if (history.length > 50) history.shift();
+}
+
+function rotateHub(index) {
+  if (isBusy() || state.won) return;
+  remember();
+  state.dirs[index] = (state.dirs[index] + 1) % 4;
+  hubs[index].target += Math.PI / 2;
+  state.moves++;
+  tell("桥梁正在旋转。站在桥上的旅人也会随之移动。");
+  updateHUD();
+  save();
+}
+
+function findPath(start, end) {
+  const all = nodes();
+  const byId = new Map(all.map(n => [n.id,n]));
+  if (!byId.has(start) || !byId.has(end)) return null;
+
+  const queue = [start];
+  const previous = new Map([[start, null]]);
+
+  for (let i = 0; i < queue.length; i++) {
+    const id = queue[i];
+    if (id === end) {
+      const result = [];
+      let cursor = end;
+      while (cursor !== null) {
+        result.unshift(cursor);
+        cursor = previous.get(cursor);
+      }
+      return result;
+    }
+
+    const a = byId.get(id);
+    for (const b of all) {
+      const adjacent =
+        Math.abs(a.x-b.x) + Math.abs(a.y-b.y) === 1 &&
+        a.z === b.z;
+      if (adjacent && !previous.has(b.id)) {
+        previous.set(b.id, id);
+        queue.push(b.id);
+      }
+    }
+  }
+  return null;
+}
+
+function moveTo(id) {
+  if (isBusy() || state.won || id === state.actor) return;
+
+  const path = findPath(state.actor, id);
+  if (!path) {
+    tell("道路尚未连通。先旋转桥梁，让它接上你所在的平台。");
+    return;
+  }
+
+  remember();
+  state.moves++;
+  walk = {path, segment:0, t:0};
+  tell("沿着连通的石路前进……");
+  updateHUD();
+}
+
+function land() {
+  const level = LEVELS[levelIndex];
+  const sealIds = level.seals.map(p => fixedId(...p));
+
+  if (sealIds.includes(state.actor) && !state.got.includes(state.actor)) {
+    state.got.push(state.actor);
+    const node = nodes().find(n => n.id === state.actor);
+    burst(node);
+    tell("拾起一枚光印。它会为终点的门带来光。");
+  }
+
+  if (state.actor === fixedId(...level.goal)) {
+    if (state.got.length === level.seals.length) {
+      state.won = true;
+      walk = null;
+      showWin();
+    } else {
+      tell("门还没有苏醒：请先收齐所有光印。");
+    }
+  }
+
+  updateHUD();
+  save();
+}
+
+function showWin() {
+  $("finish").hidden = false;
+  $("finishText").textContent =
+    `你以 ${state.moves} 次操作连接了这座庭院，并找回全部光印。` +
+    (levelIndex === LEVELS.length-1 ? " 三座庭院已经全部完成。" : "");
+  $("next").textContent =
+    levelIndex === LEVELS.length-1 ? "从第一庭重新开始" : "进入下一庭";
+}
+
+function updateHUD() {
+  $("seals").textContent =
+    `✧ 光印 ${state.got.length} / ${LEVELS[levelIndex].seals.length}`;
+  $("moves").textContent = `操作 ${state.moves}`;
+  $("undo").disabled = history.length === 0 || isBusy() || state.won;
+}
+
+function undo() {
+  if (!history.length || isBusy() || state.won) return;
+  state = history.pop();
+  hubs.forEach((h,i) => {
+    h.angle = h.target = state.dirs[i] * Math.PI / 2;
+  });
+  particles = [];
+  updateHUD();
+  tell("已撤回上一次操作。");
+  save();
+}
+
+function resetLevel() {
+  if (confirm("重新开始本关？本关进度会被清除。")) {
+    loadLevel(levelIndex);
+  }
+}
+
+$("undo").onclick = undo;
+$("reset").onclick = resetLevel;
+$("view").onclick = () => {
+  view = (view+1)%4;
+  tell("已切换观察方向。世界中的实际道路连接保持不变。");
+};
+$("next").onclick = () => loadLevel((levelIndex+1)%LEVELS.length);
+$("again").onclick = () => loadLevel(levelIndex);
+
+function rotateXY(x,y) {
+  for (let i=0; i<view; i++) [x,y] = [-y,x];
+  return {x,y};
+}
+
+function rawProject(x,y,z=0) {
+  const r = rotateXY(x,y);
+  return {
+    x:r.x-r.y,
+    y:(r.x+r.y)*.5-z*.84
+  };
+}
+
+function project(x,y,z=0) {
+  const p = rawProject(x,y,z);
+  return {x:ox+p.x*scale, y:oy+p.y*scale};
+}
+
+function fitScene() {
+  const points = [];
+
+  hubs.forEach(h => {
+    // 覆盖旋转过程的完整范围，防止机关转动时画面缩放。
+    for (const dx of [-3.65,3.65]) {
+      for (const dy of [-3.65,3.65]) {
+        points.push(rawProject(h.x+dx,h.y+dy,0));
+        points.push(rawProject(h.x+dx,h.y+dy,3.9));
+      }
+    }
+  });
+
+  const minX = Math.min(...points.map(p=>p.x));
+  const maxX = Math.max(...points.map(p=>p.x));
+  const minY = Math.min(...points.map(p=>p.y));
+  const maxY = Math.max(...points.map(p=>p.y));
+
+  const gameRect = $("game").getBoundingClientRect();
+  const headerRect = document.querySelector("header").getBoundingClientRect();
+  const panelRect = $("panel").getBoundingClientRect();
+  const top = headerRect.bottom-gameRect.top+12;
+  const bottom = panelRect.top-gameRect.top-10;
+  const availableH = Math.max(140,bottom-top);
+
+  scale = Math.min(
+    (W-26)/(maxX-minX),
+    availableH/(maxY-minY),
+    62
+  );
+
+  ox = W/2-(minX+maxX)/2*scale;
+  oy = top+availableH/2-(minY+maxY)/2*scale;
+}
+
+function polygon(points, fill, stroke=null) {
+  ctx.beginPath();
+  points.forEach((p,i) => {
+    if (i===0) ctx.moveTo(p.x,p.y);
+    else ctx.lineTo(p.x,p.y);
+  });
+  ctx.closePath();
+  if (fill) { ctx.fillStyle=fill; ctx.fill(); }
+  if (stroke) {
+    ctx.strokeStyle=stroke;
+    ctx.lineWidth=1;
+    ctx.stroke();
+  }
+}
+
+function ellipse(x,y,rx,ry,color) {
+  ctx.beginPath();
+  ctx.ellipse(x,y,Math.max(.1,rx),Math.max(.1,ry),0,0,Math.PI*2);
+  ctx.fillStyle=color;
+  ctx.fill();
+}
+
+function topCorners(n,width=.94,z=n.z) {
+  const r=width/2;
+  return [
+    project(n.x-r,n.y-r,z),
+    project(n.x+r,n.y-r,z),
+    project(n.x+r,n.y+r,z),
+    project(n.x-r,n.y+r,z)
+  ];
+}
+
+function drawTile(n) {
+  const width = n.kind==="hub" ? 1.02 : .94;
+  const top = topCorners(n,width);
+  const baseZ = n.kind==="bridge" ? n.z-.20 : 0;
+  const base = topCorners(n,width,baseZ);
+
+  // 等距投影中屏幕较近的两侧面。
+  const edges = [0,1,2,3].map(i=>({
+    i,
+    depth:(top[i].y+top[(i+1)%4].y)/2
+  })).sort((a,b)=>b.depth-a.depth).slice(0,2);
+
+  for (const {i} of edges) {
+    const j=(i+1)%4;
+    const color=n.kind==="bridge"
+      ? (i%2 ? "#759da3" : "#527d88")
+      : (i%2 ? "#718f98" : "#496977");
+    polygon([top[i],top[j],base[j],base[i]],color);
+  }
+
+  const fill=n.kind==="bridge" ? "#adccca" :
+             n.kind==="hub" ? "#e6d4a4" : "#d8e3d8";
+  polygon(top,fill,"#ffffff38");
+
+  const p=project(n.x,n.y,n.z+.01);
+
+  if (n.kind==="hub") {
+    ellipse(p.x,p.y,scale*.29,scale*.145,"#a48956");
+    ellipse(p.x,p.y,scale*.20,scale*.10,"#eeddb2");
+    ctx.fillStyle="#66593f";
+    ctx.textAlign="center";
+    ctx.font=`600 ${Math.max(9,scale*.28)}px sans-serif`;
+    ctx.fillText(String(n.hub+1),p.x,p.y+scale*.09);
+  } else if (n.kind==="bridge") {
+    ellipse(p.x,p.y,scale*.07,scale*.035,"#70999d");
+  }
+
+  hitTargets.push({id:n.id,points:top});
+}
+
+function drawSeal(n,t) {
+  const p=project(n.x,n.y,n.z+.60+Math.sin(t*2.2+n.x)*.08);
+  const s=scale*.18;
+  ellipse(p.x,p.y+scale*.31,s*1.3,s*.45,"#bda26440");
+
+  ctx.save();
+  ctx.shadowColor="#ffe2a0";
+  ctx.shadowBlur=16;
+  polygon([
+    {x:p.x,y:p.y-s*1.45},
+    {x:p.x+s,y:p.y},
+    {x:p.x,y:p.y+s*1.45},
+    {x:p.x-s,y:p.y}
+  ],"#ffe1a0");
+  ctx.restore();
+}
+
+function drawGate(n,t) {
+  const p=project(n.x,n.y,n.z);
+  const unlocked=state.got.length===LEVELS[levelIndex].seals.length;
+  const w=scale*.29, h=scale*.92;
+
+  ctx.save();
+  ctx.strokeStyle=unlocked ? "#ffe0a0" : "#9caa9e";
+  ctx.lineWidth=Math.max(2,scale*.085);
+  if (unlocked) {
+    ctx.shadowColor="#ffda8a";
+    ctx.shadowBlur=15+Math.sin(t*2)*5;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(p.x-w,p.y);
+  ctx.lineTo(p.x-w,p.y-h);
+  ctx.lineTo(p.x+w,p.y-h);
+  ctx.lineTo(p.x+w,p.y);
+  ctx.stroke();
+
+  if (unlocked) {
+    const gradient=ctx.createLinearGradient(p.x,p.y-h,p.x,p.y);
+    gradient.addColorStop(0,"#ffe5aa55");
+    gradient.addColorStop(1,"#ffe5aa08");
+    ctx.fillStyle=gradient;
+    ctx.fillRect(p.x-w,p.y-h,w*2,h);
+  }
+  ctx.restore();
+}
+
+function actorPosition() {
+  const all=nodes();
+  if (walk) {
+    const a=all.find(n=>n.id===walk.path[walk.segment]);
+    const b=all.find(n=>n.id===walk.path[walk.segment+1]);
+    const q=walk.t;
+    return {
+      x:a.x+(b.x-a.x)*q,
+      y:a.y+(b.y-a.y)*q,
+      z:a.z+Math.sin(q*Math.PI)*.06
+    };
+  }
+  return visualNode(all.find(n=>n.id===state.actor));
+}
+
+function drawActor(n,t) {
+  const p=project(n.x,n.y,n.z);
+  const s=scale;
+  const bob=walk ? Math.sin(t*22)*s*.018 : Math.sin(t*2)*s*.012;
+
+  ellipse(p.x,p.y+s*.015,s*.19,s*.075,"#18374755");
+
+  // 原创青绿色斗篷角色，不使用原作人物形象。
+  polygon([
+    {x:p.x,y:p.y-s*.67+bob},
+    {x:p.x-s*.21,y:p.y-s*.08},
+    {x:p.x+s*.20,y:p.y-s*.08}
+  ],"#48b6b0","#b2e2ce88");
+
+  polygon([
+    {x:p.x,y:p.y-s*.67+bob},
+    {x:p.x+s*.20,y:p.y-s*.08},
+    {x:p.x+s*.035,y:p.y-s*.15}
+  ],"#277f89");
+
+  ellipse(p.x,p.y-s*.65+bob,s*.12,s*.14,"#e9dcb6");
+
+  // 铜色小灯。
+  ellipse(p.x+s*.23,p.y-s*.31,s*.055,s*.075,"#ffdc91");
+}
+
+function burst(n) {
+  for (let i=0;i<18;i++) {
+    particles.push({
+      x:n.x,y:n.y,z:n.z+.4,
+      vx:(Math.random()-.5)*1.5,
+      vy:(Math.random()-.5)*1.5,
+      vz:Math.random()*1.1+.4,
+      life:1,
+      max:1
+    });
+  }
+}
+
+function depth(n) {
+  const p=rotateXY(n.x,n.y);
+  return p.x+p.y;
+}
+
+function draw(t) {
+  ctx.clearRect(0,0,W,H);
+  fitScene();
+  hitTargets=[];
+
+  // 背景浮尘。
+  for (let i=0;i<32;i++) {
+    const x=(Math.sin(i*143.4)*.5+.5)*W;
+    const y=((i*73+t*(2+i%3))%(H+30))-15;
+    ellipse(x,y,1+(i%2)*.5,1,"#c5dfd61b");
+  }
+
+  // 各庭院下方的水面 / 悬浮基座。
+  for (const h of hubs) {
+    const base={x:h.x,y:h.y,z:-.22};
+    polygon(topCorners(base,7.25),"#4273831e","#8cb8b51c");
+    const p=project(h.x,h.y,-.18);
+    ellipse(p.x,p.y,scale*2.7,scale*1.18,"#081d2935");
+  }
+
+  const all=nodes().map(visualNode);
+  const actor=actorPosition();
+  const goalId=fixedId(...LEVELS[levelIndex].goal);
+  const seals=new Set(
+    LEVELS[levelIndex].seals.map(p=>fixedId(...p))
+  );
+
+  const items=all.map(n=>({kind:"tile",n,d:depth(n)}));
+  items.push({kind:"actor",n:actor,d:depth(actor)+.025});
+  items.sort((a,b)=>a.d-b.d);
+
+  for (const item of items) {
+    if (item.kind==="actor") {
+      drawActor(item.n,t);
+      continue;
+    }
+    const n=item.n;
+    drawTile(n);
+    if (seals.has(n.id) && !state.got.includes(n.id)) drawSeal(n,t);
+    if (n.id===goalId) drawGate(n,t);
+  }
+
+  for (const p of particles) {
+    const q=project(p.x,p.y,p.z);
+    ctx.globalAlpha=Math.max(0,p.life/p.max);
+    ellipse(q.x,q.y,2,2,"#ffe2a0");
+  }
+  ctx.globalAlpha=1;
+}
+
+function update(dt) {
+  let finishedRotation=false;
+
+  for (const h of hubs) {
+    const diff=h.target-h.angle;
+    if (Math.abs(diff)>.001) {
+      h.angle += Math.min(diff,dt*2.8);
+      if (Math.abs(h.target-h.angle)<.001) {
+        h.angle=h.target;
+        finishedRotation=true;
+      }
+    }
+  }
+
+  if (finishedRotation && !isBusy()) {
+    tell("桥梁已停稳。点击连通的平台继续，或站在桥上转向另一边。");
+    updateHUD();
+  }
+
+  if (walk) {
+    walk.t += dt/.24;
+
+    if (walk.t>=1) {
+      state.actor=walk.path[walk.segment+1];
+      walk.segment++;
+      walk.t=0;
+
+      if (walk.segment>=walk.path.length-1) walk=null;
+      land();
+
+      if (!walk && !state.won) {
+        if (!LEVELS[levelIndex].seals
+          .some(p=>fixedId(...p)===state.actor) &&
+          state.actor!==fixedId(...LEVELS[levelIndex].goal)) {
+          tell("已到达。可以继续行走，也可以在桥上旋转机关。");
+        }
+      }
+    }
+  }
+
+  particles.forEach(p=>{
+    p.x+=p.vx*dt;
+    p.y+=p.vy*dt;
+    p.z+=p.vz*dt;
+    p.vz-=dt*.7;
+    p.life-=dt;
+  });
+  particles=particles.filter(p=>p.life>0);
+}
+
+function pointInPolygon(p,points) {
+  let inside=false;
+  for (let i=0,j=points.length-1;i<points.length;j=i++) {
+    const a=points[i],b=points[j];
+    if (((a.y>p.y)!==(b.y>p.y)) &&
+        p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x) {
+      inside=!inside;
+    }
+  }
+  return inside;
+}
+
+canvas.addEventListener("pointerup",event=>{
+  if (isBusy() || state.won) return;
+  const rect=canvas.getBoundingClientRect();
+  const point={
+    x:event.clientX-rect.left,
+    y:event.clientY-rect.top
+  };
+
+  // 优先命中最前方的顶面。
+  let target=[...hitTargets].reverse()
+    .find(t=>pointInPolygon(point,t.points));
+
+  // 小屏幕点按辅助：允许顶面附近少量误差。
+  if (!target) {
+    let nearest=Infinity;
+    for (const candidate of hitTargets) {
+      const center=candidate.points.reduce(
+        (a,p)=>({x:a.x+p.x/4,y:a.y+p.y/4}),{x:0,y:0});
+      const distance=Math.hypot(center.x-point.x,center.y-point.y);
+      if (distance<Math.max(12,scale*.45) && distance<nearest) {
+        nearest=distance;
+        target=candidate;
+      }
+    }
+  }
+
+  if (target) moveTo(target.id);
+});
+
+function resize() {
+  const rect=canvas.getBoundingClientRect();
+  W=rect.width;
+  H=rect.height;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  canvas.width=Math.round(W*dpr);
+  canvas.height=Math.round(H*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+window.addEventListener("resize",resize);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize",resize);
+}
+
+// 桌面快捷键：1/2/3 旋转，Z 撤销，V 切换观察方向。
+window.addEventListener("keydown",event=>{
+  if (event.target instanceof HTMLButtonElement) return;
+  const i=Number(event.key)-1;
+  if (Number.isInteger(i) && i>=0 && i<hubs.length) rotateHub(i);
+  if (event.key.toLowerCase()==="z") undo();
+  if (event.key.toLowerCase()==="v") $("view").click();
+});
+
+let restored=null;
+try {
+  const raw=JSON.parse(localStorage.getItem(STORE));
+  if (validSave(raw)) restored=raw;
+} catch {}
+
+loadLevel(restored ? restored.level : 0,restored ? restored.state : null);
+resize();
+
+function loop(time) {
+  const dt=Math.min((time-lastTime)/1000,.05);
+  lastTime=time;
+  frameTime+=dt;
+  update(dt);
+  draw(frameTime);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+document.addEventListener("visibilitychange",()=>{
+  lastTime=performance.now();
+  if (document.hidden) save();
+});
+
+if ("serviceWorker" in navigator &&
+    (location.protocol==="https:" || location.hostname==="localhost")) {
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./sw.js")
+      .catch(error=>console.warn("离线缓存未启用：",error));
+  });
+}
+</script>
+</body>
+</html>

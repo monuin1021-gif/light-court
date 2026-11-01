@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "折光庭院 · 空间解谜",
+  "short_name": "折光庭院",
+  "description": "旋转悬桥，收集光印，连接庭院的道路。",
+  "lang": "zh-CN",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#172a3a",
+  "theme_color": "#172a3a",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
